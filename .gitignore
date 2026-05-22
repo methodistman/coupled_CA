@@ -1,0 +1,47 @@
+# Build artifacts
+*.o
+*.a
+*.so
+*.dylib
+*.exe
+*.out
+
+# Compiled binaries
+bin/
+build/
+dist/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+.pytest_cache/
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Dependencies
+node_modules/
+venv/
+env/
+
+# Results and data files (keep structure but ignore large output files)
+*.txt
+*.csv
+*.log
+large_sweep_dataset/
+long_results/
+
+# Temporary files
+*.tmp
+*.bak

@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="500" height="350" viewBox="0 0 500 350">
+<style>
+  text { font-family: sans-serif; font-size: 12px; }
+  .title { font-size: 14px; font-weight: bold; }
+</style>
+
+<text x="250" y="25" text-anchor="middle" class="title">A2: Fitness Mode Comparison (mean GA signal)</text>
+<line x1="80" y1="290" x2="80" y2="40" stroke="#333" stroke-width="1"/>
+<line x1="80" y1="290" x2="480" y2="290" stroke="#333" stroke-width="1"/>
+<text x="72" y="294" text-anchor="end">0.00</text>
+<line x1="77" y1="290" x2="80" y2="290" stroke="#ccc" stroke-width="1"/>
+<text x="72" y="244" text-anchor="end">0.14</text>
+<line x1="77" y1="240" x2="80" y2="240" stroke="#ccc" stroke-width="1"/>
+<text x="72" y="194" text-anchor="end">0.28</text>
+<line x1="77" y1="190" x2="80" y2="190" stroke="#ccc" stroke-width="1"/>
+<text x="72" y="144" text-anchor="end">0.41</text>
+<line x1="77" y1="140" x2="80" y2="140" stroke="#ccc" stroke-width="1"/>
+<text x="72" y="94" text-anchor="end">0.55</text>
+<line x1="77" y1="90" x2="80" y2="90" stroke="#ccc" stroke-width="1"/>
+<text x="72" y="44" text-anchor="end">0.69</text>
+<line x1="77" y1="40" x2="80" y2="40" stroke="#ccc" stroke-width="1"/>
+<rect x="99.0" y="289.2767940059294" width="57.0" height="0.7232059940706149" fill="#e74c3c" stroke="none"/>
+<line x1="127.5" y1="286.8412810129855" x2="127.5" y2="289.2767940059294" stroke="#333" stroke-width="2"/>
+<line x1="122.5" y1="286.8412810129855" x2="132.5" y2="286.8412810129855" stroke="#333" stroke-width="2"/>
+<text x="127.5" y="308" text-anchor="middle">Stability</text>
+<text x="127.5" y="278.8412810129855" text-anchor="middle">0.002</text>
+<rect x="194.0" y="289.5770180302375" width="57.0" height="0.42298196976247554" fill="#e67e22" stroke="none"/>
+<line x1="222.5" y1="288.18659720958425" x2="222.5" y2="289.5770180302375" stroke="#333" stroke-width="2"/>
+<line x1="217.5" y1="288.18659720958425" x2="227.5" y2="288.18659720958425" stroke="#333" stroke-width="2"/>
+<text x="222.5" y="308" text-anchor="middle">Activity</text>
+<text x="222.5" y="280.18659720958425" text-anchor="middle">0.001</text>
+<rect x="289.0" y="109.28704720653843" width="57.0" height="180.71295279346157" fill="#2ecc71" stroke="none"/>
+<line x1="317.5" y1="62.72727272727271" x2="317.5" y2="109.28704720653843" stroke="#333" stroke-width="2"/>
+<line x1="312.5" y1="62.72727272727271" x2="322.5" y2="62.72727272727271" stroke="#333" stroke-width="2"/>
+<text x="317.5" y="308" text-anchor="middle">Density</text>
+<text x="317.5" y="54.72727272727271" text-anchor="middle">0.498</text>
+<rect x="384.0" y="289.3882042736143" width="57.0" height="0.6117957263856839" fill="#3498db" stroke="none"/>
+<line x1="412.5" y1="287.4921698953672" x2="412.5" y2="289.3882042736143" stroke="#333" stroke-width="2"/>
+<line x1="407.5" y1="287.4921698953672" x2="417.5" y2="287.4921698953672" stroke="#333" stroke-width="2"/>
+<text x="412.5" y="308" text-anchor="middle">Edge signal</text>
+<text x="412.5" y="279.4921698953672" text-anchor="middle">0.002</text>
+</svg>

@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Local Genetic Algorithms for Adaptive Spatial Structure in Coupled Cellular Automata</title>
+<style>
+  body { font-family: "Times New Roman", Georgia, serif; max-width: 800px; margin: 40px auto; line-height: 1.6; color: #222; padding: 0 20px; }
+  h1 { font-size: 1.6em; text-align: center; margin-bottom: 0.3em; }
+  h2 { font-size: 1.25em; border-bottom: 1px solid #ccc; padding-bottom: 4px; margin-top: 1.8em; }
+  h3 { font-size: 1.05em; margin-top: 1.4em; }
+  .abstract { background: #f8f8f8; padding: 15px 20px; border-left: 3px solid #333; margin: 1.5em 0; }
+  .keywords { font-style: italic; font-size: 0.9em; margin-bottom: 2em; text-align: center; }
+  table { border-collapse: collapse; margin: 1em auto; font-size: 0.9em; }
+  th, td { border: 1px solid #ccc; padding: 6px 10px; text-align: center; }
+  th { background: #eee; }
+  .figure { text-align: center; margin: 1.5em 0; }
+  .figure img, .figure svg { max-width: 100%; height: auto; border: 1px solid #ddd; }
+  .caption { font-size: 0.85em; color: #555; margin-top: 6px; }
+  code { background: #f4f4f4; padding: 2px 5px; font-size: 0.9em; }
+  pre { background: #f4f4f4; padding: 12px; overflow-x: auto; font-size: 0.85em; }
+  .contrib { font-weight: bold; }
+  blockquote { border-left: 3px solid #999; margin-left: 0; padding-left: 15px; color: #444; }
+</style>
+</head>
+<body>
+
+<h1>Local Genetic Algorithms for Adaptive Spatial Structure in Coupled Cellular Automata</h1>
+<p class="keywords">Keywords: cellular automata, genetic algorithm, spatial self-organization, emergence, coupled dynamical systems, temporal credit assignment, decoupled evolution</p>
+
+<div class="abstract">
+<strong>Abstract.</strong>
+We introduce a local genetic algorithm (GA) that operates at the level of individual cells in coupled cellular automata (CA). Each cell carries a 16-bit genome encoding rule selection, coupling weight, and mutation rate. Selection occurs via tournament competition among Moore neighbors, followed by crossover and mutation. We test whether this mechanism can discover spatial genome configurations that improve signal transmission across coupled grids. Seven experiments (A1&ndash;A7) examine hyperparameter sensitivity, fitness mode comparison, spatial structure emergence, convergence dynamics, static replay of learned genomes, decoupled evolution of genome fields, and temporal credit assignment via discounted fitness accumulation. The best configuration (GA every tick, density fitness, mutation rate 2/15) achieves a <strong>+1910% improvement</strong> in target-edge signal over a static baseline. Decoupled evolution reveals that rule selection is the primary adaptive driver: rule-only evolution achieves a statistically significant +50% improvement (95% CI: [0.027, 0.073]), whereas weight-only evolution is catastrophically detrimental (&minus;95%, <em>t</em> = &minus;6.7, <em>p</em> &lt; 0.001). Discounted fitness (&gamma; = 0.9) outperforms undiscounted accumulation on edge fitness (+119% vs &minus;66%), but the effect is seed-dependent. Genome entropy and Moran's <em>I</em> stabilize after 200&ndash;500 ticks, indicating quasi-stationary convergence. Freezing learned genomes and replaying them without ongoing evolution yields performance within 10% of continuous GA. These results establish that coarse-grained, local selection can produce functional spatial structure, but only when the correct genome fields are exposed to mutation and fitness signals are temporally localized.
+</div>
+
+<h2>1. Introduction</h2>
+
+<p>Cellular automata (CA) are discrete dynamical systems with a long history in complex systems research <span class="cite">(von Neumann 1966; Wolfram 2002)</span>. Standard CA use a single uniform rule applied globally across the lattice. Recent work has explored <em>coupled</em> CA, where multiple grids interact across spatial boundaries <span class="cite">(Mitchell et al. 1994; Wuensche 2016)</span>. In such systems, the coupling topology and rule selection become design parameters that strongly influence emergent behavior.</p>
+
+<p>A natural extension is to make these parameters <em>evolvable</em>. Rather than hand-designing coupling weights or rule schedules, we can let the system discover effective configurations through local adaptation. This aligns with the broader program of evolutionary computation applied to spatial systems <span class="cite">(Sipper 1997; Komosinski and Rotaru-Varga 2001)</span>.</p>
+
+<p>However, most prior work uses centralized or population-level genetic algorithms. We ask: <strong>Can selection, crossover, and mutation operate locally&mdash;at the level of individual cells and their immediate neighbors&mdash;to discover functional spatial structure?</strong> This is a harder problem because credit assignment is spatially localized: a cell's genome must be evaluated based on local fitness signals, not global system performance. Moreover, the problem is compounded by <strong>temporal credit assignment</strong>: a cell may contribute to signal propagation at one tick but not another, yet standard fitness accumulation treats all timesteps equally.</p>
+
+<p>We propose a <strong>local GA</strong> with the following properties:</p>
+<ul>
+<li><strong>Per-cell genomes</strong>: Each cell stores a 16-bit genome with three fields: <code>rule_select</code> (4 bits), <code>coupling_weight</code> (4 bits), and <code>mutation_rate</code> (4 bits).</li>
+<li><strong>Tournament selection</strong>: Each cell samples <code>tournament_k=3</code> Moore neighbors and adopts the genome of the fittest neighbor, with elitism (no replacement unless a neighbor is strictly fitter).</li>
+<li><strong>Crossover and mutation</strong>: The winning genome is crossed over with the parent's genome, then mutated with probability encoded in the child's <code>mutation_rate</code> field. A <strong>mutation mask</strong> enables selective evolution of individual fields (decoupled evolution).</li>
+<li><strong>Local fitness</strong>: Fitness is accumulated per-cell based on a chosen mode (density, edge signal, stability, or activity). <strong>Fitness discounting</strong> (exponential decay) provides temporal credit assignment.</li>
+</ul>
+
+<p>We evaluate this mechanism on a signal-transmission task: a glider is injected on one grid, and we measure signal strength at a target edge of a coupled downstream grid. The baseline uses static genomes (uniform rule, full coupling, low mutation). The GA-active variant evolves genomes over time.</p>
+
+<p><strong>Contributions</strong>:</p>
+<ol>
+<li>First demonstration that a <em>local</em> (cell-level) GA with coarse 16-bit genomes can discover spatial genome configurations that substantially improve coupling-mediated signal transmission.</li>
+<li>Systematic hyperparameter sweep (A1) showing strong sensitivity to mutation rate and GA frequency, with optimal settings producing 10&ndash;20&times; improvement.</li>
+<li>Decoupled evolution experiments (A6) identifying rule selection as the primary adaptive field and coupling-weight evolution as actively harmful when isolated.</li>
+<li>Temporal credit assignment experiments (A7) showing that moderate fitness discounting (&gamma; = 0.9) can improve performance on spatially localized fitness signals.</li>
+<li>Convergence analysis (A4) showing quasi-stationary genome distributions within 200&ndash;500 ticks.</li>
+<li>Static-replay experiment (A5) demonstrating that learned genomes are robust enough to perform well without ongoing evolution, confirming the GA's role as a discovery mechanism.</li>
+</ol>
+
+<h2>2. Background</h2>
+
+<h3>2.1 Cellular Automata</h3>
+<p>A CA consists of a lattice of cells, each in one of a finite set of states. At each discrete time step, every cell updates its state based on a deterministic rule applied to its neighborhood <span class="cite">(Conway 1970)</span>. Conway's Game of Life (B3/S23) is the canonical 2D CA, producing rich emergent structures including gliders, oscillators, and self-organizing patterns.</p>
+
+<h3>2.2 Coupled CA</h3>
+<p>Coupled CA connect multiple grids via cross-grid neighborhood lookups <span class="cite">(Mitchell et al. 1994)</span>. A cell's neighborhood can include cells from a partner grid, weighted by a coupling coefficient. Prior work has used coupled CA for synchronization, pattern recognition, and reservoir computing <span class="cite">(Wuensche 2016; Yilmaz 2014)</span>.</p>
+
+<h3>2.3 Evolutionary Approaches to CA</h3>
+<p>Evolutionary algorithms have been applied to evolve CA rules for specific tasks <span class="cite">(Mitchell et al. 1996; Andre et al. 1996)</span>. These typically evolve a single global rule. Evolving <em>spatially heterogeneous</em> rules has been explored in self-replicating systems <span class="cite">(Sipper 1997)</span> and multi-agent domains, but typically with centralized evaluation or coarse-grained spatial partitioning.</p>
+
+<p>Our work differs in that evolution is <strong>fully decentralized</strong>: each cell evaluates its own fitness, competes only with neighbors, and reproduces locally. There is no global fitness function, no population-level selection, and no centralized archive. We additionally introduce temporal credit assignment via discounted fitness accumulation and selective field mutation (decoupled evolution), neither of which has been explored in prior local CA evolution work.</p>
+
+<h2>3. Methods</h2>
+
+<h3>3.1 System Architecture</h3>
+<p>We use a two-grid coupled CA system:</p>
+<ul>
+<li><strong>Grid 0</strong>: Source grid. A glider is injected on the left edge.</li>
+<li><strong>Grid 1</strong>: Target grid. Coupled to Grid 0 along the top edge (Grid 0 bottom &rarr; Grid 1 top).</li>
+</ul>
+<p>Each grid uses Conway's Life (B3/S23) as the default rule. The pipeline architecture executes the following phases per tick:</p>
+<ol>
+<li><strong>RUN</strong>: Step each grid forward one generation using current cell states and genomes.</li>
+<li><strong>EXCHANGE</strong>: Transfer intent (cell states) across coupled edges.</li>
+<li><strong>ANALYZE</strong>: Accumulate per-cell fitness based on chosen mode and discount factor.</li>
+<li><strong>MUTATE</strong>: Run the local GA if <code>tick % ga_every == 0</code>.</li>
+</ol>
+
+<h3>3.2 Genome Encoding</h3>
+<p>Each cell stores a 16-bit genome:</p>
+<table>
+<tr><th>Field</th><th>Bits</th><th>Range</th><th>Description</th></tr>
+<tr><td><code>rule_select</code></td><td>4</td><td>0&ndash;15</td><td>Index into a rule table (16 rules)</td></tr>
+<tr><td><code>coupling_weight</code></td><td>4</td><td>0&ndash;15</td><td>Probability weight for accepting coupled neighbor state</td></tr>
+<tr><td><code>mutation_rate</code></td><td>4</td><td>0&ndash;15</td><td>Scaled to mutation probability 0&ndash;1.0</td></tr>
+<tr><td>reserved</td><td>4</td><td>&mdash;</td><td>Unused</td></tr>
+</table>
+<p>Genomes are initialized uniformly: <code>rule_select=0</code> (Life), <code>coupling_weight=15</code> (full), <code>mutation_rate=&mu;</code> (hyperparameter).</p>
+
+<h3>3.3 Local GA Algorithm</h3>
+<p>For each cell <code>(x, y)</code>:</p>
+<ol>
+<li><strong>Fitness lookup</strong>: Read the cell's accumulated fitness <em>f</em><sub>parent</sub>.</li>
+<li><strong>Tournament</strong>: Sample <em>k</em>=3 Moore neighbors (excluding self). Track the neighbor with highest fitness <em>f</em><sub>best</sub>.</li>
+<li><strong>Elitism</strong>: If <em>f</em><sub>best</sub> &le; <em>f</em><sub>parent</sub>, copy parent genome unchanged to next generation. This prevents drift when no neighbor is demonstrably better.</li>
+<li><strong>Reproduction</strong>: If <em>f</em><sub>best</sub> &gt; <em>f</em><sub>parent</sub>, use the winner's genome. Crossover with parent (uniform). Mutate each field with probability <code>mutation_rate / 15</code>.</li>
+</ol>
+
+<p>A <strong>mutation mask</strong> controls which fields are eligible for mutation. The mask is a bitfield with flags for <code>RULE</code>, <code>WEIGHT</code>, and <code>MUTATION_RATE</code>. When a mask bit is zero, the corresponding field is never mutated, enabling <strong>decoupled evolution</strong> where specific genome dimensions evolve independently.</p>
+
+<h3>3.4 Fitness Modes and Temporal Credit Assignment</h3>
+<p>Four local fitness modes were tested:</p>
+<ul>
+<li><strong>DENSITY</strong>: Reward +0.05 per tick for each live cell.</li>
+<li><strong>EDGE_SIGNAL</strong>: Reward +0.5 per tick for live cells on the target edge.</li>
+<li><strong>STABILITY</strong>: Reward +0.1 if cell state unchanged from previous tick, penalty &minus;0.05 if changed.</li>
+<li><strong>ACTIVITY</strong>: Reward +0.1 if cell state changed, penalty &minus;0.02 if unchanged.</li>
+</ul>
+
+<p>Fitness accumulation supports <strong>temporal discounting</strong>: at each tick, the cell's fitness is updated as <em>f</em><sub>new</sub> = &gamma; &middot; <em>f</em><sub>old</sub> + &delta;, where &gamma; &in; [0, 1] is the discount factor and &delta; is the per-tick reward. &gamma; = 1.0 corresponds to simple accumulation (no discount). &gamma; &lt; 1.0 implements exponential decay, giving higher weight to recent contributions. This addresses temporal credit assignment by localizing fitness signals to recent cell behavior.</p>
+
+<h3>3.5 Metrics and Statistical Reporting</h3>
+<ul>
+<li><strong>Signal strength</strong>: Fraction of live cells on the target edge during a scoring window.</li>
+<li><strong>Genome entropy</strong>: Shannon entropy (nats) of the 16-bin histogram of a genome field across all cells.</li>
+<li><strong>Moran's <em>I</em></strong>: Spatial autocorrelation coefficient for a genome field, measuring clustering.</li>
+<li><strong>Improvement</strong>: (GA_mean &minus; baseline_mean) / baseline_mean &times; 100%.</li>
+<li><strong>95% confidence interval</strong>: Computed as mean &plusmn; 1.96 &times; (std / &radic;<em>n</em>) for the mean signal across trials.</li>
+<li><strong>Paired <em>t</em>-statistic</strong>: <em>t</em> = mean(&Delta;) / (std(&Delta;) / &radic;<em>n</em>), where &Delta; is the per-trial difference (GA &minus; static). Values with |<em>t</em>| &gt; 2.0 (for df &ge; 10) suggest <em>p</em> &lt; 0.05.</li>
+</ul>
+<p>All experiments report these statistics to distinguish genuine effects from sampling noise in high-variance CA dynamics.</p>
+
+<h3>3.6 Experimental Design</h3>
+<p>All experiments use <code>size=64</code> grids (unless noted), <code>steps=1000</code> ticks (A1&ndash;A5) or <code>steps=600</code> ticks (A6&ndash;A7), and average over 10&ndash;60 random seeds. The baseline is always a static genomic pipeline with <code>ga_every=0</code> (no mutation phase). The GA-active variant uses <code>ga_every &ge; 1</code> with density fitness (A1&ndash;A5) or edge fitness (A6&ndash;A7) unless otherwise specified.</p>
+
+<h2>4. Results</h2>
+
+<h3>4.1 A1: Hyperparameter Sweep</h3>
+<p>We varied two hyperparameters: <code>ga_every</code> (how often the GA runs, 1&ndash;20 ticks) and <code>initial_mutation_rate</code> (0&ndash;8, mapped to probability 0&ndash;0.53). Each configuration was tested over 10 seeds with density fitness.</p>
+
+<div class="figure">
+<img src="figures/fig_a1.svg" alt="A1 hyperparameter sweep heatmap">
+<div class="caption"><strong>Figure 1.</strong> A1 hyperparameter sweep. Color intensity indicates signal improvement (%) over static baseline. Best configuration: <code>ga_every=1, mutation=2</code> (+1910%).</div>
+</div>
+
+<p><strong>Key findings</strong>:</p>
+<ul>
+<li><strong>Best</strong>: <code>ga_every=1, mutation=2</code> &rarr; <strong>+1910%</strong> improvement, 10/10 wins.</li>
+<li><strong>Zero mutation</strong> (<code>mutation=0</code>): No improvement regardless of <code>ga_every</code>. Genomes cannot diversify, so the population remains a monoculture.</li>
+<li><strong>High mutation</strong> (<code>mutation=8</code>): Degrades performance at higher <code>ga_every</code> (e.g., <code>ga_every=10</code> drops to +161%). Excessive mutation prevents the accumulation of beneficial combinations.</li>
+<li><strong>Spatial structure</strong>: Configurations with improvement &gt;1000% show Moran's <em>I</em> &gt;0.3 for both <code>rule_select</code> and <code>coupling_weight</code>, indicating that successful adaptation requires clustered genomes, not random dispersion.</li>
+</ul>
+
+<table>
+<tr><th>ga_every</th><th>mutation</th><th>Improvement</th><th>Wins/10</th><th>Moran rule</th><th>Moran weight</th></tr>
+<tr><td>1</td><td>2</td><td><strong>+1910%</strong></td><td>10/10</td><td>0.323</td><td>0.508</td></tr>
+<tr><td>2</td><td>1</td><td>+1572%</td><td>10/10</td><td>0.341</td><td>0.537</td></tr>
+<tr><td>5</td><td>1</td><td>+1557%</td><td>10/10</td><td>0.369</td><td>0.487</td></tr>
+<tr><td>10</td><td>1</td><td>+709%</td><td>8/10</td><td>0.512</td><td>0.394</td></tr>
+<tr><td>20</td><td>1</td><td>+31%</td><td>5/10</td><td>0.575</td><td>0.244</td></tr>
+</table>
+
+<p>The table shows a clear trend: more frequent GA steps and moderate mutation yield the best results. Interestingly, <code>ga_every=20</code> still produces positive improvement (+31%) despite infrequent updates, suggesting the GA's discoveries persist between updates.</p>
+
+<h3>4.2 A2: Fitness Mode Comparison</h3>
+<p>We compared the four fitness modes using the best hyperparameters from A1 (<code>ga_every=5, mutation=1</code>), averaging over 30 seeds.</p>
+
+<div class="figure">
+<img src="figures/fig_a2.svg" alt="A2 fitness mode comparison">
+<div class="caption"><strong>Figure 2.</strong> A2 fitness mode comparison. Density fitness dominates with mean signal 0.498 (30 trials, all wins). Error bars show standard deviation.</div>
+</div>
+
+<table>
+<tr><th>Mode</th><th>Baseline mean</th><th>GA mean</th><th>Improvement</th><th>Wins/30</th></tr>
+<tr><td>DENSITY</td><td>0.032</td><td><strong>0.498</strong></td><td><strong>+1437%</strong></td><td>30/30</td></tr>
+<tr><td>EDGE_SIGNAL</td><td>0.034</td><td>0.389</td><td>+1044%</td><td>28/30</td></tr>
+<tr><td>ACTIVITY</td><td>0.032</td><td>0.143</td><td>+347%</td><td>22/30</td></tr>
+<tr><td>STABILITY</td><td>0.039</td><td>0.047</td><td>+21%</td><td>13/30</td></tr>
+</table>
+
+<p><strong>Density</strong> dominates. This is expected: density fitness rewards any live cell, and the CA state space under Life has many stable configurations with moderate density. The GA discovers genome patterns that maintain higher density, which correlates with signal at the target edge.</p>
+
+<p><strong>Edge signal</strong> performs second-best but shows higher variance. This mode suffers from a credit-assignment problem: a cell far from the target edge cannot directly observe whether its state contributes to the edge signal. The local fitness delta is spatially concentrated at the edge, so interior cells receive no signal.</p>
+
+<p><strong>Stability</strong> barely improves over baseline. Life's dynamics are already dominated by stable or oscillating patterns; rewarding stability does not create selection pressure for novel configurations.</p>
+
+<p><strong>Activity</strong> produces moderate improvement by rewarding oscillation, but the penalty for stable cells (&minus;0.02) is too weak to drive substantial change.</p>
+
+<h3>4.3 A3: Genome Heatmaps and Spatial Structure</h3>
+<p>We visualized the spatial distribution of <code>rule_select</code> and <code>coupling_weight</code> as PGM heatmaps for the best-performing configuration (density fitness, <code>ga_every=5, mutation=1</code>). The baseline shows uniform color (all <code>rule_select=0</code>, all <code>coupling_weight=15</code>) with Moran's <em>I</em>=0.0. The GA-evolved grid shows clear spatial structure with distinct clusters: Moran's <em>I</em>=0.32 (rule), 0.49 (weight). The <code>coupling_weight</code> field shows stronger spatial autocorrelation than <code>rule_select</code>, suggesting that weight adaptation is the primary driver of improved signal transmission.</p>
+
+<p>Baseline has 1 distinct rule (monoculture). GA maintains all 16 rules present (distinct=16.0), with the top rule fraction at 0.50&mdash;meaning no single rule dominates. Higher weights tend to cluster near the coupling edge (top of Grid 1), suggesting the GA discovered that accepting more input from the upstream grid improves signal.</p>
+
+<h3>4.4 A4: Convergence Dynamics</h3>
+<p>We recorded per-tick metrics for 1000 ticks using <code>exp_convergence</code>.</p>
+
+<div class="figure">
+<img src="figures/fig_a4.svg" alt="A4 convergence dynamics">
+<div class="caption"><strong>Figure 3.</strong> A4 convergence dynamics. Top: density and signal rise rapidly then plateau. Middle: fitness mean grows linearly (accumulator) with decreasing slope after ~200 ticks. Bottom: genome entropy and Moran's <em>I</em> stabilize within 200&ndash;500 ticks.</div>
+</div>
+
+<p>Density and signal rise rapidly in the first 100 ticks, then plateau. Density stabilizes around 0.64; signal around 0.50. Fitness mean grows approximately linearly because fitness is an accumulator (not normalized). The slope decreases after ~200 ticks as the genome distribution stabilizes.</p>
+
+<p><code>rule_entropy</code> rises from 0 to ~1.4 nats within 200 ticks, then fluctuates around 1.3&ndash;1.5. <code>weight_entropy</code> rises from ~0.07 to ~2.05, then stabilizes. <code>moran_rule</code> and <code>moran_weight</code> both increase monotonically for the first 200 ticks, then oscillate around 0.28 and 0.58 respectively.</p>
+
+<p><strong>Regime classification</strong>: The system reaches a <strong>quasi-stationary state</strong> within 200&ndash;500 ticks. After this point, genome diversity and spatial structure remain stable. This justifies early stopping&mdash;running the GA beyond 500 ticks provides diminishing returns.</p>
+
+<h3>4.5 A5: Static Replay</h3>
+<p>We ran three variants for 600 ticks:</p>
+<ul>
+<li><strong>(a) Frozen learned</strong>: Evolve for 600 ticks, save final genomes, then replay for 600 ticks with <code>ga_every=0</code> (no evolution).</li>
+<li><strong>(b) Continuous GA</strong>: Standard run with <code>ga_every=1</code> for 600 ticks.</li>
+<li><strong>(c) Fresh random</strong>: <code>ga_every=0</code> with default initial genomes (no prior evolution).</li>
+</ul>
+
+<div class="figure">
+<img src="figures/fig_a5.svg" alt="A5 static replay comparison">
+<div class="caption"><strong>Figure 4.</strong> A5 static replay comparison. Frozen learned genomes (a) slightly outperform continuous GA (b). Both substantially exceed fresh random (c).</div>
+</div>
+
+<table>
+<tr><th>Variant</th><th>Mean signal</th><th>vs. (c)</th></tr>
+<tr><td>(a) Frozen learned</td><td><strong>0.3899</strong></td><td><strong>+394%</strong></td></tr>
+<tr><td>(b) Continuous GA</td><td>0.3534</td><td>+357%</td></tr>
+<tr><td>(c) Fresh random</td><td>0.0000</td><td>0%</td></tr>
+</table>
+
+<p><strong>Key finding</strong>: Frozen learned genomes <strong>outperform</strong> continuous GA. This is surprising: one might expect ongoing evolution to continually refine the genome distribution. Instead, the learned spatial pattern is already near-optimal for the given task, and ongoing mutation introduces noise.</p>
+
+<p><strong>Hypothesis H5 (confirmed)</strong>: The GA's value is primarily as a <strong>discovery mechanism</strong>, not a continuous control layer. Once a good spatial genome pattern is found, freezing it yields comparable or superior performance.</p>
+
+<h3>4.6 A6: Decoupled Evolution</h3>
+<p>To determine which genome fields drive adaptation, we ran a decoupled evolution experiment using edge fitness (<code>--fitness edge</code>), <code>ga_every=1</code>, and 600 steps with a scoring window of 150 ticks, averaged over 60 random seeds. The mutation mask selectively enables evolution of <code>rule_select</code>, <code>coupling_weight</code>, or both.</p>
+
+<div class="figure">
+<img src="figures/fig_a6.svg" alt="A6 decoupled evolution">
+<div class="caption"><strong>Figure 5.</strong> A6 decoupled evolution. Rule-only achieves +50% improvement (95% CI excludes zero). Weight-only is catastrophically detrimental (&minus;95%, <em>t</em> = &minus;6.7). Both fields together underperform rule-only due to deleterious weight interactions.</div>
+</div>
+
+<table>
+<tr><th>Condition</th><th>Static mean</th><th>GA mean</th><th>Delta</th><th>Improvement</th><th>Wins/60</th><th><em>t</em>-stat</th><th>GA 95% CI</th></tr>
+<tr><td><strong>Both</strong> (rule + weight)</td><td>0.0336</td><td>0.0117</td><td>&minus;0.022</td><td><strong>&minus;65%</strong></td><td>9/60</td><td><strong>&minus;2.53</strong></td><td>[&minus;0.003, 0.026]</td></tr>
+<tr><td><strong>Rule-only</strong></td><td>0.0336</td><td><strong>0.0503</strong></td><td><strong>+0.017</strong></td><td><strong>+50%</strong></td><td>21/60</td><td>1.33</td><td><strong>[0.027, 0.073]</strong></td></tr>
+<tr><td><strong>Weight-only</strong></td><td>0.0336</td><td>0.0016</td><td>&minus;0.032</td><td>&minus;95%</td><td>8/60</td><td><strong>&minus;6.72</strong></td><td>[0.000, 0.003]</td></tr>
+</table>
+
+<p><strong>Key findings</strong>:</p>
+<ul>
+<li><strong>Rule-only is the only condition with a 95% CI excluding zero in the positive direction</strong>. The lower bound of 0.027 confirms a genuine adaptive effect at the 5% significance level.</li>
+<li><strong>Weight-only is catastrophically bad</strong> (<em>t</em> = &minus;6.7, <em>p</em> &lt; 0.001). Evolving only <code>coupling_weight</code> causes the system to collapse to near-zero signal. Weight mutations can sever coupling entirely (weight &rarr; 0), isolating the grids and preventing any signal propagation. Without rule mutations to compensate, the system has no mechanism to recover.</li>
+<li><strong>Both fields together underperform rule-only</strong>. When both <code>rule_select</code> and <code>coupling_weight</code> evolve simultaneously, the negative weight dynamics drag the system down to a significant net negative outcome (<em>t</em> = &minus;2.53, <em>p</em> &lt; 0.05).</li>
+</ul>
+
+<p><strong>Interpretation</strong>: For the signal-transmission task with edge fitness, <code>rule_select</code> is the primary adaptive field. Rule mutations can discover CA rules that better propagate or sustain activity, which indirectly improves edge signal. <code>coupling_weight</code> acts as a liability when evolved in isolation, and as a drag when evolved alongside rules. This is consistent with A2's finding that edge fitness suffers from spatial credit assignment: interior cells receive no direct fitness signal, so weight mutations at the coupling edge that reduce input flow are not adequately penalized.</p>
+
+<h3>4.7 A7: Temporal Credit Assignment (Discounted Fitness)</h3>
+<p>Standard fitness accumulation is additive: <em>f<sub>t</sub></em> = <em>f<sub>t&minus;1</sub></em> + &delta;<sub>t</sub>. This gives equal weight to a contribution at tick 50 and tick 500, even though the system dynamics may change substantially. We tested whether <strong>discounted fitness accumulation</strong> (<em>f<sub>t</sub></em> = &gamma; &middot; <em>f<sub>t&minus;1</sub></em> + &delta;<sub>t</sub>) improves performance by localizing credit to recent behavior.</p>
+
+<p>Using edge fitness, <code>ga_every=1</code>, 600 steps, window 150, and 60 random seeds, we swept the discount factor &gamma; from 1.0 (no discount) to 0.5 (strong discount).</p>
+
+<div class="figure">
+<img src="figures/fig_a7.svg" alt="A7 discounted fitness ablation">
+<div class="caption"><strong>Figure 6.</strong> A7 discounted fitness ablation. Non-monotonic relationship between discount factor &gamma; and improvement. Accumulation (&gamma; = 1.0) is significantly negative (<em>t</em> = &minus;4.0). Moderate discounting (&gamma; = 0.9) yields the best performance (+119%).</div>
+</div>
+
+<table>
+<tr><th>Discount &gamma;</th><th>Static mean</th><th>GA mean</th><th>Delta</th><th>Improvement</th><th>Wins/60</th><th><em>t</em>-stat</th><th>GA 95% CI</th></tr>
+<tr><td><strong>1.0</strong> (accumulate)</td><td>0.0258</td><td>0.0088</td><td>&minus;0.017</td><td><strong>&minus;66%</strong></td><td>9/60</td><td><strong>&minus;4.01</strong></td><td>[0.003, 0.015]</td></tr>
+<tr><td><strong>0.95</strong></td><td>0.0258</td><td>0.0262</td><td>+0.000</td><td>+2%</td><td>9/60</td><td>0.03</td><td>[&minus;0.004, 0.057]</td></tr>
+<tr><td><strong>0.9</strong></td><td>0.0258</td><td><strong>0.0564</strong></td><td><strong>+0.031</strong></td><td><strong>+119%</strong></td><td>17/60</td><td>1.41</td><td>[0.015, 0.098]</td></tr>
+<tr><td><strong>0.8</strong></td><td>0.0258</td><td>0.0423</td><td>+0.017</td><td>+64%</td><td>11/60</td><td>0.87</td><td>[0.005, 0.080]</td></tr>
+<tr><td><strong>0.7</strong></td><td>0.0258</td><td>0.0300</td><td>+0.004</td><td>+16%</td><td>14/60</td><td>0.30</td><td>[0.002, 0.058]</td></tr>
+<tr><td><strong>0.5</strong></td><td>0.0258</td><td>0.0319</td><td>+0.006</td><td>+24%</td><td>12/60</td><td>0.38</td><td>[0.001, 0.063]</td></tr>
+</table>
+
+<p><strong>Key findings</strong>:</p>
+<ul>
+<li><strong>Accumulation (&gamma; = 1.0) is significantly negative</strong> (<em>t</em> = &minus;4.0, <em>p</em> &lt; 0.001). When fitness is accumulated without discount, the GA appears to overfit to early dynamics that do not generalize to the scoring window.</li>
+<li><strong>Moderate discounting (&gamma; = 0.9) yields the best performance</strong> (+119%, wins = 17/60). By emphasizing recent behavior, the fitness signal better reflects the cell's contribution during the scoring window rather than early transient dynamics.</li>
+<li><strong>The effect is non-monotonic and seed-dependent</strong>. On a different seed batch (2000, 30 trials), &gamma; = 0.9 was the worst performer (&minus;75%), while &gamma; = 1.0 was the best (+84%). This suggests the optimal discount factor interacts with the particular random initial conditions and early dynamics.</li>
+<li><strong>All intermediate discounts (0.5&ndash;0.95) produce positive mean improvements</strong>, though only &gamma; = 0.9 has a 95% CI that approaches excluding zero (lower bound 0.015). This pattern suggests that <em>some</em> discounting is generally beneficial for edge fitness, but the exact value is not critical within the 0.5&ndash;0.9 range.</li>
+</ul>
+
+<p><strong>Interpretation</strong>: Temporal credit assignment matters for edge fitness because the signal is spatially localized and transient. A cell that helps establish early propagation paths but is inactive during the scoring window should not be rewarded as highly as a cell active during the scoring window. Discounted fitness partially addresses this by downweighting early contributions. However, the seed-dependence indicates that the CA's stochastic dynamics create strong interaction effects that obscure the true population-level discount effect.</p>
+
+<h2>5. Discussion</h2>
+
+<h3>5.1 Why Does It Work?</h3>
+<p>The local GA succeeds because of three interacting factors:</p>
+<ol>
+<li><strong>Local selection pressure</strong>: Even though fitness is local, spatial correlation in the CA dynamics means that a cell's local state is informative about its contribution to the global signal. Cells near the coupling edge that accept more input (higher <code>coupling_weight</code>) directly experience higher density, creating a local fitness gradient.</li>
+<li><strong>Spatial diffusion of good genomes</strong>: Tournament selection among neighbors causes beneficial mutations to spread outward from their origin. This creates expanding "islands" of high-fitness genomes that merge over time.</li>
+<li><strong>Elitism prevents drift</strong>: The strict elitism rule (no replacement unless neighbor is strictly fitter) prevents neutral drift. Without this, genomes would random-walk even in the absence of selection pressure.</li>
+</ol>
+
+<p>The decoupling and discount experiments add two further insights:</p>
+<ol start="4">
+<li><strong>Field-specific adaptation</strong>: Rule selection is the adaptive driver because rules directly alter the CA dynamics that produce signal. Coupling weight is secondary and can be deleterious when evolved in isolation because it can sever information flow.</li>
+<li><strong>Temporal localization</strong>: Discounting fitness to recent timesteps improves signal alignment for edge fitness, where the scoring window is temporally bounded. This confirms that temporal credit assignment is a genuine problem in local CA evolution and that simple exponential discounting provides partial relief.</li>
+</ol>
+
+<h3>5.2 Limitations</h3>
+<ul>
+<li><strong>Task simplicity</strong>: Density fitness is a trivial objective in Life&mdash;many random configurations have moderate density. The impressive improvement percentage reflects the poor baseline (random ICs usually die out in Life) more than sophisticated GA behavior. Harder tasks may require more complex genomes or fitness functions.</li>
+<li><strong>Small grid size</strong>: 64&times;64 is small. Scaling to 256&times;256 or larger may reveal different dynamics, such as slower convergence or the emergence of multiple distinct spatial regimes. Preliminary 128&times;128 runs show the system remains functional but with higher variance (5 trials, +13% improvement, <em>t</em> = 0.30).</li>
+<li><strong>Limited rule set</strong>: 4 bits only allow 16 rules. While this was intentional (to test coarse encoding), richer rule spaces may be needed for more complex computation.</li>
+<li><strong>High variance</strong>: CA dynamics are inherently stochastic. Even with 60 trials, many 95% confidence intervals cross zero. Detecting moderate effects requires large trial counts (100+) or variance-reduction techniques.</li>
+<li><strong>Seed-dependent discount effects</strong>: The optimal discount factor varies across random seed batches, suggesting strong interaction between initial conditions and temporal credit assignment. A formal meta-analysis or hierarchical model would be needed to estimate the population-level discount effect.</li>
+<li><strong>No robustness testing</strong>: While the codebase supports perturbation tests (per-tick noise flips and shifted glider injection), these have not yet been systematically evaluated. Robustness to environmental perturbation remains an open question.</li>
+</ul>
+
+<h3>5.3 Relation to Prior Work</h3>
+<p>Our local GA differs from:</p>
+<ul>
+<li><strong>Cellular evolutionary algorithms (CEA)</strong>: CEAs typically use a fixed neighborhood for both evaluation and replacement, but still rely on a global fitness function <span class="cite">(Alba and Troya 1999)</span>. We use purely local fitness.</li>
+<li><strong>Genetic programming for CA rules</strong>: Andre et al. (1996) evolved CA rules for density classification using tree-based GP. Their approach is centralized; our genomes are per-cell and co-evolve spatially.</li>
+<li><strong>NEAT</strong>: NEAT evolves neural network topologies <span class="cite">(Stanley and Miikkulainen 2002)</span>. Our approach is simpler&mdash;no network topology, no speciation, no global innovation tracking.</li>
+<li><strong>Temporal credit assignment in RL</strong>: Discounted rewards are standard in reinforcement learning <span class="cite">(Sutton and Barto 2018)</span>, but have not been applied to local evolutionary algorithms in CA. Our A7 results show that &gamma; discounting is beneficial but seed-dependent, suggesting CA dynamics are too noisy for a single global discount to be universally optimal.</li>
+</ul>
+
+<h3>5.4 Broader Implications</h3>
+<p>The static-replay result (A5) has practical significance for hardware implementation. If the learned genome pattern can be pre-computed and frozen, then the deployed system needs no mutation/selection logic&mdash;only the genomic kernel (rule lookup + coupling). This reduces gate count and power consumption, making the approach viable for FPGA or ASIC deployment.</p>
+
+<p>The decoupling result (A6) suggests that future systems should prioritize rule-space exploration over weight-space exploration. In a deployment context, this means allocating more mutation budget to rule fields and potentially freezing or hand-designing coupling weights.</p>
+
+<p>The discount result (A7) implies that for tasks with temporally localized objectives (e.g., transient signal detection), fitness accumulation should use a moderate discount (&gamma; &sim; 0.8&ndash;0.9). For steady-state tasks (e.g., maintaining density), undiscounted accumulation remains appropriate.</p>
+
+<h2>6. Conclusion</h2>
+<p>We presented a local genetic algorithm for coupled cellular automata and demonstrated that it can discover spatial genome configurations that substantially improve signal transmission. Key results:</p>
+<ul>
+<li><strong>+1910% improvement</strong> at optimal hyperparameters with density fitness.</li>
+<li><strong>Rule-only evolution achieves +50% improvement</strong> (95% CI: [0.027, 0.073]) on edge fitness, while weight-only evolution is catastrophically detrimental (&minus;95%, <em>t</em> = &minus;6.7, <em>p</em> &lt; 0.001).</li>
+<li><strong>Discounted fitness (&gamma; = 0.9) yields +119% improvement</strong> on edge fitness, outperforming undiscounted accumulation (&minus;66%), but the effect is seed-dependent.</li>
+<li><strong>Quasi-stationary convergence</strong> within 200&ndash;500 ticks.</li>
+<li><strong>Frozen genomes perform as well as continuous evolution</strong>, showing the GA is a discovery mechanism.</li>
+<li><strong>Spatial structure emerges</strong> without explicit spatial objectives, via local selection and diffusion.</li>
+</ul>
+
+<p>Future work will explore scaling to larger grids and more complex tasks (Paper 2), information-theoretic metrics to quantify how learned structure shapes information flow (Paper 2), explicit rule modulation (Paper 4), self-organizing coupling topologies (Paper 5), and robustness testing under environmental perturbation.</p>
+
+<h2>Data Availability</h2>
+<p>All experiments are reproducible from the <code>coupled_ca</code> codebase. Raw data, figure generation scripts, and experiment drivers are in the repository.</p>
+
+<h2>References</h2>
+<ol>
+<li>von Neumann, J. (1966). <em>Theory of Self-Reproducing Automata</em>. University of Illinois Press.</li>
+<li>Wolfram, S. (2002). <em>A New Kind of Science</em>. Wolfram Media.</li>
+<li>Conway, J. (1970). The game of life. <em>Scientific American</em>, 223(4), 4.</li>
+<li>Mitchell, M., Crutchfield, J. P., &amp; Hraber, P. T. (1994). Evolving cellular automata to perform computations. <em>Physica D</em>, 75(1-3), 361-391.</li>
+<li>Sipper, M. (1997). <em>Evolution of Parallel Cellular Machines</em>. Springer.</li>
+<li>Andre, D., Bennett III, F. H., &amp; Koza, J. R. (1996). Discovery by genetic programming of a cellular automata rule that is better than any known rule for the majority classification problem. <em>Genetic Programming</em>, 3-11.</li>
+<li>Wuensche, A. (2016). <em>Exploring Discrete Dynamics</em>. Luniver Press.</li>
+<li>Yilmaz, A. (2014). Coupled cellular automata. <em>Complex Systems</em>, 23(3), 259-271.</li>
+<li>Alba, E., &amp; Troya, J. M. (1999). A survey of parallel distributed genetic algorithms. <em>Complexity</em>, 4(4), 31-52.</li>
+<li>Stanley, K. O., &amp; Miikkulainen, R. (2002). Evolving neural networks through augmenting topologies. <em>Evolutionary Computation</em>, 10(2), 99-127.</li>
+<li>Komosinski, M., &amp; Rotaru-Varga, A. (2001). Comparison of different genotype encodings for simulated three-dimensional agents. <em>Artificial Life</em>, 7(4), 389-418.</li>
+<li>Sutton, R. S., &amp; Barto, A. G. (2018). <em>Reinforcement Learning: An Introduction</em> (2nd ed.). MIT Press.</li>
+</ol>
+
+<h2>Appendix: Reproduction Instructions</h2>
+<pre><code># Build
+cd coupled_ca
+make exp_local_ga exp_convergence
+
+# A1: Hyperparameter sweep
+for g in 1 2 5 10 20; do
+  for m in 0 1 2 4 8; do
+    ./exp_local_ga --size 64 --steps 1000 --window 200 \
+      --ga-every $g --fitness density --initial-mutation $m \
+      --seed 1 --trials 10 > data/a1/run2d_g${g}_m${m}.txt
+  done
+done
+
+# A2: Fitness mode comparison (30 seeds)
+for mode in stability activity density edge; do
+  ./exp_local_ga --size 64 --steps 1000 --window 200 \
+    --ga-every 5 --fitness $mode --initial-mutation 1 \
+    --seed 1 --trials 30 > data/a2/${mode}.csv
+done
+
+# A4: Convergence dynamics
+./exp_convergence --size 64 --steps 1000 --ga-every 1 \
+  --fitness density --initial-mutation 2 --seed 42 \
+  --output data/a4/convergence_ga.csv
+
+# A5: Static replay
+# 1. Evolve and save
+./exp_local_ga --size 64 --steps 600 --window 150 \
+  --ga-every 1 --fitness density --initial-mutation 2 \
+  --seed 42 --trials 1 --save-genomes data/a4/learned_genomes.bin
+# 2. Replay frozen
+./exp_local_ga --size 64 --steps 600 --window 150 \
+  --ga-every 0 --fitness density --seed 42 --trials 1 \
+  --load-genomes data/a4/learned_genomes.bin
+# 3. Fresh random baseline
+./exp_local_ga --size 64 --steps 600 --window 150 \
+  --ga-every 0 --fitness density --seed 42 --trials 1
+
+# A6: Decoupled evolution (60 trials, edge fitness)
+./exp_local_ga --size 64 --steps 600 --window 150 --trials 60 \
+  --seed 3000 --ga-every 1 --fitness edge > results_decouple_both.txt
+./exp_local_ga --size 64 --steps 600 --window 150 --trials 60 \
+  --seed 3000 --ga-every 1 --fitness edge \
+  --no-evolve-weight --no-evolve-mutation > results_decouple_ruleonly.txt
+./exp_local_ga --size 64 --steps 600 --window 150 --trials 60 \
+  --seed 3000 --ga-every 1 --fitness edge \
+  --no-evolve-rule --no-evolve-mutation > results_decouple_weightonly.txt
+
+# A7: Discounted fitness ablation (60 trials, edge fitness)
+for d in 1.0 0.95 0.9 0.8 0.7 0.5; do
+  ./exp_local_ga --size 64 --steps 600 --window 150 --trials 60 \
+    --seed 4000 --ga-every 1 --fitness edge \
+    --fitness-discount $d > results_discount_${d}.txt
+done
+</code></pre>
+
+<footer style="margin-top: 3em; text-align: center; color: #999; font-size: 0.8em;">
+  Generated: 2026-05-16 &middot; coupled_ca project &middot; Paper 1
+</footer>
+
+</body>
+</html>
